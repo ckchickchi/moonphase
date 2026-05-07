@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>月相模擬實驗室</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            background-color: #0f172a;
+            color: #f8fafc;
+            overflow-x: hidden;
+        }
+        .drag-target {
+            cursor: pointer;
+        }
+        .drag-target:active {
+            cursor: grabbing;
+        }
+    </style>
+</head>
+<body class="min-h-screen p-4 md:p-8">
+    <div class="max-w-7xl mx-auto space-y-6">
+        <header class="text-center">
+            <h1 class="text-3xl font-bold text-blue-400">月相模擬實驗室</h1>
+            <p class="text-slate-400 mt-2">空間位置與地平線觀測對照</p>
+        </header>
+
+        <main class="grid grid-cols-1 lg:grid-cols-2 gap-8 h-full">
+            <!-- A區塊：空間視圖 -->
+            <section id="block-a" class="bg-slate-800 rounded-2xl p-6 shadow-xl border border-slate-700 relative flex flex-col">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-xl font-semibold border-l-4 border-yellow-500 pl-3">A區：日、月、地空間視圖</h2>
+                    <div class="text-sm text-slate-400">（地球北極俯視圖）</div>
+                </div>
+                
+                <div class="flex-grow flex items-center justify-center relative aspect-square max-w-full overflow-hidden">
+                    <svg id="svg-a" viewBox="0 0 400 400" class="w-full h-full max-h-[500px]">
+                        <!-- 整體系統向左移動且放大 -->
+                        <g transform="translate(-30, 0) scale(1.15) transform-origin(200 200)">
+                            <!-- 軌道線 (半徑100) -->
+                            <circle cx="200" cy="200" r="100" fill="none" stroke="#475569" stroke-dasharray="4 4" />
+                            
+                            <!-- 太陽 (右側) -->
+                            <g transform="translate(370, 200)">
+                                <circle r="18" fill="#fef08a" class="animate-pulse shadow-lg" />
+                                <path d="M0 -28 L0 -22 M20 -20 L16 -16 M28 0 L22 0 M20 20 L16 16 M0 28 L0 22 M-20 20 L-16 16 M-28 0 L-22 0 M-20 -20 L-16 -16" fill="none" stroke="#fef08a" stroke-width="2.5" />
+                            </g>
+
+                            <!-- 地球 (中心) -->
+                            <g transform="translate(200, 200)">
+                                <!-- 照光面 (右) -->
+                                <path d="M 0,-25 A 25,25 0 0,1 0,25 Z" fill="#60a5fa" />
+                                <!-- 背光面 (左) -->
+                                <path d="M 0,-25 A 25,25 0 0,0 0,25 Z" fill="#1e40af" />
+                                
+                                <!-- 觀測者與地平面 -->
+                                <g id="observer-group" class="drag-target">
+                                    <line id="horizon-line" x1="-40" y1="0" x2="40" y2="0" stroke="white" stroke-width="2" />
+                                    <text id="observer-emoji" x="0" y="0" text-anchor="middle" font-size="26" dominant-baseline="text-after-edge" transform="scale(1, -1)">🚶</text>
+                                    <!-- 東西方標示：旋轉180度以符合小人方向 -->
+                                    <text id="label-east" x="50" y="5" fill="#FFFFFF" font-size="18" font-weight="bold" transform="rotate(180, 50, 0)" text-anchor="middle">東</text>
+                                    <text id="label-west" x="-65" y="5" fill="#FFFFFF" font-size="18" font-weight="bold" transform="rotate(180, -65, 0)" text-anchor="middle">西</text>
+                                </g>
+                            </g>
+
+                            <!-- 月球 (軌道上) -->
+                            <g id="moon-group" class="drag-target">
+                                <!-- 照光面 (右) -->
+                                <path d="M 0,-15 A 15,15 0 0,1 0,15 Z" fill="#f1f5f9" />
+                                <!-- 背光面 (左) -->
+                                <path d="M 0,-15 A 15,15 0 0,0 0,15 Z" fill="#475569" />
+                            </g>
+                        </g>
+                    </svg>
+                </div>
+
+                <!-- A區控制項 -->
+                <div class="mt-6 space-y-4 bg-slate-900/50 p-4 rounded-xl">
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center space-x-2">
+                            <span class="text-slate-300 font-medium">時間：</span>
+                            <div class="flex space-x-1">
+                                <input type="number" id="time-h" value="12" min="0" max="23" class="w-12 bg-slate-700 border-none rounded px-1 text-center text-blue-300 focus:ring-1 focus:ring-blue-500">
+                                <span class="text-slate-500">:</span>
+                                <input type="number" id="time-m" value="00" min="0" max="59" class="w-12 bg-slate-700 border-none rounded px-1 text-center text-blue-300 focus:ring-1 focus:ring-blue-500">
+                            </div>
+                        </div>
+                        <div class="flex space-x-4">
+                            <label class="flex items-center space-x-2 cursor-pointer">
+                                <input type="checkbox" id="rotate-earth" class="hidden peer">
+                                <div class="w-10 h-5 bg-slate-600 rounded-full peer peer-checked:bg-blue-600 relative transition-colors">
+                                    <div class="absolute left-1 top-1 w-3 h-3 bg-white rounded-full transition-all peer-checked:translate-x-5"></div>
+                                </div>
+                                <span class="text-sm text-slate-300">地球自轉</span>
+                            </label>
+                            <label class="flex items-center space-x-2 cursor-pointer">
+                                <input type="checkbox" id="rotate-moon" class="hidden peer">
+                                <div class="w-10 h-5 bg-slate-600 rounded-full peer peer-checked:bg-yellow-600 relative transition-colors">
+                                    <div class="absolute left-1 top-1 w-3 h-3 bg-white rounded-full transition-all peer-checked:translate-x-5"></div>
+                                </div>
+                                <span class="text-sm text-slate-300">月球公轉</span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- B區塊：觀測視圖 -->
+            <section id="block-b" class="rounded-2xl p-6 shadow-xl border border-slate-700 relative overflow-hidden flex flex-col transition-colors duration-500">
+                <div class="flex justify-between items-center mb-4 relative z-10">
+                    <h2 class="text-xl font-semibold border-l-4 border-blue-500 pl-3">B區：地上觀測視圖</h2>
+                </div>
+
+                <div class="flex-grow flex items-center justify-center relative aspect-video mt-4 overflow-hidden">
+                    <svg id="svg-b" viewBox="0 0 600 400" class="w-full h-full">
+                        <!-- 系統內容縮小並往上移動，確保最高點不裁切 -->
+                        <g transform="translate(0, -20) scale(0.9) transform-origin(300 200)">
+                            <!-- 天空弧線 -->
+                            <path d="M 50,250 A 250,250 0 0,1 550,250" fill="none" stroke="rgba(255,255,255,0.15)" stroke-dasharray="2 2" />
+                            
+                            <!-- 太陽 (觀測視圖) -->
+                            <g id="sky-sun">
+                                <circle r="22" fill="#fef08a" filter="drop-shadow(0 0 10px #fef08a)" />
+                            </g>
+
+                            <!-- 月球 (觀測視圖) -->
+                            <g id="sky-moon">
+                                <!-- 暗面設為透明 (不畫底圓) -->
+                                <g id="sky-moon-phase"></g>
+                            </g>
+
+                            <!-- 地平線 -->
+                            <line x1="0" y1="250" x2="600" y2="250" stroke="#4a5568" stroke-width="5" />
+                            
+                            <!-- 觀測者：改為左東右西 -->
+                            <g transform="translate(300, 250)">
+                                <text x="0" y="-5" text-anchor="middle" font-size="32">🚶</text>
+                                <text x="-240" y="40" fill="#FFFFFF" font-size="20" font-weight="bold">東方</text>
+                                <text x="240" y="40" fill="#FFFFFF" font-size="20" font-weight="bold">西方</text>
+                            </g>
+                        </g>
+                    </svg>
+                </div>
+
+                <!-- 不透明黑色底的資訊框 -->
+                <div class="mt-6 p-4 rounded-xl bg-black text-sm text-slate-300 z-10 border border-slate-800">
+                    <p id="observer-info">目前的狀態：白晝</p>
+                    <p class="text-xs text-white mt-2 italic leading-relaxed">
+                        說明：<br>
+左區可以用滑鼠調整月亮與人的位置，也可以調整時間(24小時制)改變人的位置。
+                    </p>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script>
+        const state = {
+            moonAngle: 0, 
+            observerAngle: 0, 
+            earthRadius: 25,
+            moonOrbitRadius: 100,
+            isRotatingEarth: false,
+            isRotatingMoon: false
+        };
+
+        const moonGroup = document.getElementById('moon-group');
+        const observerGroup = document.getElementById('observer-group');
+        const timeHInput = document.getElementById('time-h');
+        const timeMInput = document.getElementById('time-m');
+        const rotateEarthCheckbox = document.getElementById('rotate-earth');
+        const rotateMoonCheckbox = document.getElementById('rotate-moon');
+        const blockB = document.getElementById('block-b');
+        const sunSky = document.getElementById('sky-sun');
+        const moonSky = document.getElementById('sky-moon');
+        const moonPhaseGroup = document.getElementById('sky-moon-phase');
+        const observerInfo = document.getElementById('observer-info');
+        const svgA = document.getElementById('svg-a');
+
+        function init() {
+            update();
+            setupInteractions();
+            animate();
+        }
+
+        function update() {
+            // A區月球
+            const mx = 200 + Math.cos(state.moonAngle * Math.PI / 180) * state.moonOrbitRadius;
+            const my = 200 - Math.sin(state.moonAngle * Math.PI / 180) * state.moonOrbitRadius;
+            moonGroup.setAttribute('transform', `translate(${mx}, ${my})`);
+
+            // A區觀測者
+            const ox = Math.cos(state.observerAngle * Math.PI / 180) * state.earthRadius;
+            const oy = -Math.sin(state.observerAngle * Math.PI / 180) * state.earthRadius;
+            observerGroup.setAttribute('transform', `translate(${ox}, ${oy}) rotate(${-state.observerAngle - 90})`);
+
+            // 更新時間
+            let totalMins = 12 * 60 + Math.round(state.observerAngle * 4);
+            while (totalMins < 0) totalMins += 24 * 60;
+            totalMins %= (24 * 60);
+            const h = Math.floor(totalMins / 60);
+            const m = totalMins % 60;
+            if (document.activeElement !== timeHInput) timeHInput.value = h;
+            if (document.activeElement !== timeMInput) timeMInput.value = m.toString().padStart(2, '0');
+
+            updateBlockB();
+        }
+
+        function updateBlockB() {
+            const zenithY = 250; 
+            
+            const getAltitudeInfo = (targetAngle) => {
+                let diff = (targetAngle - state.observerAngle) % 360;
+                while (diff > 180) diff -= 360;
+                while (diff < -180) diff += 360;
+
+                // 反轉 X 座標以實現左東右西 (東方 diff 為正，原本在右邊 300+... 現在改為 300-...)
+                const x = 300 - Math.sin(diff * Math.PI / 180) * 230; 
+                const y = zenithY - Math.cos(diff * Math.PI / 180) * 230;
+                return { x, y, visible: Math.abs(diff) <= 90, angleFromZenith: diff };
+            };
+
+            const sunInfo = getAltitudeInfo(0);
+            const moonInfo = getAltitudeInfo(state.moonAngle);
+
+            sunSky.setAttribute('transform', `translate(${sunInfo.x}, ${sunInfo.y})`);
+            sunSky.style.opacity = sunInfo.visible ? '1' : '0.3'; 
+
+            moonSky.setAttribute('transform', `translate(${moonInfo.x}, ${moonInfo.y})`);
+            moonSky.style.opacity = moonInfo.visible ? '1' : '0.3';
+
+            const bgColor = sunInfo.visible ? '#bae6fd' : '#000000';
+            blockB.style.backgroundColor = bgColor;
+
+            if (sunInfo.visible) {
+                observerInfo.textContent = "目前的狀態：白晝";
+                observerInfo.className = "observer-info text-sky-400 font-medium"; // 改為與夜晚相同顏色
+            } else {
+                observerInfo.textContent = "目前的狀態：夜晚";
+                observerInfo.className = "observer-info text-sky-400 font-medium";
+            }
+
+            // 月相指向太陽
+            const angleToSun = Math.atan2(sunInfo.y - moonInfo.y, sunInfo.x - moonInfo.x) * 180 / Math.PI;
+            moonPhaseGroup.setAttribute('transform', `rotate(${angleToSun})`);
+            
+            drawMoonPhase(state.moonAngle);
+        }
+
+        function drawMoonPhase(moonAngle) {
+            let elongation = moonAngle % 360;
+            while (elongation < 0) elongation += 360;
+
+            moonPhaseGroup.innerHTML = '';
+            const r = 18;
+            
+            // 物理正確邏輯：
+            // elongation 0 (新月) -> k = cos(0) = 1 (兩弧重疊，面積為0)
+            // elongation 180 (滿月) -> k = cos(180) = -1 (兩弧形成完整圓)
+            const k = Math.cos(elongation * Math.PI / 180); 
+            
+            // 滿月 (180度附近)
+            if (k <= -0.98) {
+                const full = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                full.setAttribute('r', r);
+                full.setAttribute('fill', '#f1f5f9');
+                moonPhaseGroup.appendChild(full);
+                return;
+            }
+            
+            // 新月 (0度附近)
+            if (k >= 0.98) return; 
+
+            const phasePath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+            
+            // SVG Path 繪製：
+            // A rx ry x-axis-rotation large-arc-flag sweep-flag x y
+            // 第一弧 (右半圓): sweep-flag = 1
+            // 第二弧 (明暗界線): sweep-flag 隨 k 的正負號改變 (k>0 凹，k<0 凸)
+            const d = `M 0,${-r} A ${r},${r} 0 0,1 0,${r} A ${Math.abs(k)*r},${r} 0 0,${k < 0 ? 1 : 0} 0,${-r}`;
+            
+            phasePath.setAttribute('d', d);
+            phasePath.setAttribute('fill', '#f1f5f9');
+            moonPhaseGroup.appendChild(phasePath);
+        }
+
+        function setupInteractions() {
+            let isDraggingMoon = false;
+            let isDraggingObserver = false;
+
+            const handleStart = (e) => {
+                const target = e.target.closest('.drag-target');
+                if (!target) return;
+                if (target.id === 'moon-group') isDraggingMoon = true;
+                if (target.id === 'observer-group' || target.id === 'observer-emoji') isDraggingObserver = true;
+            };
+
+            const handleMove = (e) => {
+                if (!isDraggingMoon && !isDraggingObserver) return;
+                
+                const pt = svgA.createSVGPoint();
+                const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+                const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+                pt.x = clientX;
+                pt.y = clientY;
+                const svgPt = pt.matrixTransform(svgA.getScreenCTM().inverse());
+                
+                // 計算角度：y軸方向需要反轉 (SVG座標系 y 向下)
+                const angle = -Math.atan2(svgPt.y - 200, svgPt.x - 200) * 180 / Math.PI;
+
+                if (isDraggingMoon) {
+                    state.moonAngle = angle;
+                } else if (isDraggingObserver) {
+                    state.observerAngle = angle;
+                }
+                update();
+            };
+
+            const handleEnd = () => {
+                isDraggingMoon = false;
+                isDraggingObserver = false;
+            };
+
+            window.addEventListener('mousedown', handleStart);
+            window.addEventListener('mousemove', handleMove);
+            window.addEventListener('mouseup', handleEnd);
+            window.addEventListener('touchstart', handleStart);
+            window.addEventListener('touchmove', handleMove);
+            window.addEventListener('touchend', handleEnd);
+
+            rotateEarthCheckbox.addEventListener('change', (e) => state.isRotatingEarth = e.target.checked);
+            rotateMoonCheckbox.addEventListener('change', (e) => state.isRotatingMoon = e.target.checked);
+
+            const handleTimeInput = () => {
+                const h = parseInt(timeHInput.value) || 0;
+                const m = parseInt(timeMInput.value) || 0;
+                const totalMins = (h * 60 + m) % (24 * 60);
+                let diff = totalMins - 720;
+                state.observerAngle = diff / 4;
+                update();
+            };
+
+            timeHInput.addEventListener('input', handleTimeInput);
+            timeMInput.addEventListener('input', handleTimeInput);
+        }
+
+        function animate() {
+            if (state.isRotatingEarth) state.observerAngle += 0.2;
+            if (state.isRotatingMoon) state.moonAngle += 0.05;
+            if (state.isRotatingEarth || state.isRotatingMoon) update();
+            requestAnimationFrame(animate);
+        }
+
+        init();
+    </script>
+</body>
+</html>
